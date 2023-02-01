@@ -72,3 +72,51 @@ summarise(flights, delay = mean(dep_delay, na.rm = T))
 by_day <- group_by(flights, year, month, day)
 # 并不会对原数据产生啥变化，但是会增添分组信息，从而为后面的函数提供
 summarise(by_day, delay = mean(dep_delay, na.rm = T))
+# 像是在ggplot2里面使用+一样，对于dplyr也可以使用类似的方法
+# 同时也可以使用“管道”来直接传递参数，从而避免写中间变量
+# 管道符号，在阅读的时候，可以直接理解为then
+(delays <- flights %>% group_by(dest) %>%
+  summarise(count = n(),
+            dist = mean(distance, na.rm = T),
+            delay = mean(arr_delay, na.rm = T)) %>%
+  filter(count > 20, dest != 'NHL'))
+# 可以发现，使用了管道符号之后，后面的函数通通都没有data这个参数了，管道会自动的将前面的数据传入
+# 在使用聚合函数，如summarize时，我们常常需要加入n()/sum()函数来判断我们聚合的数量到底是多少
+# 从概率论里面很容易知道，数字越大越好）
+not_canceled <- flights %>% filter(!is.na(dep_delay), !is.na(arr_delay))
+not_canceled %>% 
+  group_by(year, month, day) %>%
+  summarise(mean = mean(dep_delay))
+delays <- not_canceled %>% group_by(tailnum) %>% 
+  summarise(delay = mean(arr_delay))
+library(ggplot2)
+ggplot(data = delays, mapping = aes(x = delay)) + geom_freqpoly(binwidth = 10)
+# 再画散点图看看
+(delays <- not_canceled %>% group_by(tailnum) %>% 
+  summarise(delay = mean(arr_delay, na.rm = T), n = n()))
+# 可以发现，n参数返回了对应分组的大小，这样我们就可以去除那些太小的组防止随机误差
+ggplot(data = delays, mapping = aes(x = n, y = delay)) + 
+  geom_point(alpha = 0.1) # 随着n增大，delay趋近于0
+# +/%>%这两个连接符号，是可以同时使用的
+delays %>% filter(n > 25) %>% 
+  ggplot(data = delays, mapping = aes(x = n, y = delay)) + 
+  geom_point(alpha = 0.1) # %>%可以传给ggplot，但是+不能传给dplyr
+# 在R中进行数据筛选的时候，也可以使用简单的逻辑表达式来筛选
+not_canceled %>% group_by(year, month, day) %>% 
+  summarise(avg_delay1 = mean(arr_delay),
+            avg_delay2 = mean(arr_delay[arr_delay>0]))
+# 还有很多摘要函数能够搭配summarize来使用
+# mean()/median()
+# sd()/IQR()/mad()
+# min()/quantile(x,0.25)/max()
+# first()/nth(x,2)/last()
+# n_distinct() 找出唯一值
+# 在和数值一起使用的时候，bool会自动转化为0和1
+
+
+
+
+
+
+
+
