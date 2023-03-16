@@ -5,6 +5,7 @@ getwd()
 
 ################################################################################
 # use modelr to build basic models
+# all used is linear model
 ################################################################################
 
 
@@ -100,6 +101,64 @@ ggplot(sim3, aes(x1, y, color = x2)) + geom_point() + geom_line(data = grid, aes
 sim3 <- sim3 %>% gather_residuals(mod1, mod2)
 ggplot(sim3, aes(x1, resid, color = x2)) + geom_point() + facet_wrap(model ~ x2)
 
+# 和上面类似的，我们也可以使用两个连续变量来构造交互项
+mod1 <- lm(y ~ x1 + x2, data = sim4)
+mod2 <- lm(y ~ x1 * x2, data = sim4)
+(grid <- sim4 %>% data_grid(
+  x1 = seq_range(x1, 5),
+  x2 = seq_range(x2, 5)
+) %>% gather_predictions(mod1, mod2))
+ggplot(grid, aes(x1, x2)) + geom_tile(aes(fill = pred)) + facet_wrap(~ model)
+# 这样的可视化显然看不太出预测的结果
+ggplot(grid, mapping = aes(x1, pred, color = x2, group = x2)) +
+  geom_line() + facet_wrap(~ model)
+ggplot(grid, aes(x2, pred, color = x1, group = x1)) + geom_line() + 
+  facet_wrap(~ model) # 这样可以发现，不管是不是连续变量，交互项都是差不多的样子
 
+# 在构造模型的时候，我们常常会对变量进行转换，比如自变量设置为x^2
+# 在模型公式中，此类转换必须要用I()进行包装，不然R会认为这是公式的一部分
+df <- tibble(
+  x = c(1, 2, 3),
+  y = c(1, 4, 9)
+)
+model_matrix(df, y ~ x^2 - 1)
+model_matrix(df, y ~ I(x^2) - 1)
+# 可以发现，第一个模型仍然是将x作为自变量，这是因为R把^2认为是公式的一部分，也就是x*x，x自己的交互项
+# R会自动避免过剩的无用变量，x与自己的交互项，那自然会被认为是x自身
 
+# 模型变量转换的一个很有用的地方是，可以利用泰勒公式来近似任何的非线性函数，这样我们就能通过一个线性公式来表示非线性关系
+df <- tribble(
+  ~x, ~y,
+  1, 1,
+  2, 2,
+  3, 3
+)
+model_matrix(df, y ~ poly(x, 2)) # 因为泰勒手打很烦，R提供了ploy函数来快捷输入，后面的2表示两项
+# poly容易造成多项式趋近无穷，建议用下面的splines::ns()
+model_matrix(df, y ~ ns(x, 2))
+
+# 用三角函数来看一下效果
+sim5 <- tibble(
+  x = seq(0, 3.5 * pi, length = 100),
+  y = 4 * sin(x) + rnorm(length(x))
+) # 加了扰动项的三角函数
+ggplot(sim5, aes(x, y)) + geom_point()
+
+mod1 <- lm(y ~ ns(x, 1), data = sim5)
+mod2 <- lm(y ~ ns(x, 2), data = sim5)
+mod3 <- lm(y ~ ns(x, 3), data = sim5)
+mod4 <- lm(y ~ ns(x, 4), data = sim5)
+mod5 <- lm(y ~ ns(x, 5), data = sim5)
+
+grid <- sim5 %>% data_grid(x = seq_range(x, n = 50)) %>%
+  gather_predictions(mod1, mod2, mod3, mod4, mod5, .pred = 'y') # 为了后面画图方便，把预测值名字改成y
+
+ggplot(sim5, aes(x, y)) + geom_point() + geom_line(data = grid, color = 'red') +
+  facet_wrap(~ model)
+# 很明显看到，当复杂度增加到5的时候，得到的预测结果最好
+
+# 通过设定na.action，可以决定对NA如何处理
+options(na.action = na.exclude) # 直接忽略，不加入模型中
+options(na.action = na.warn) # 给一个警告
+nobs(mod5) # 看模型用了多少观测值进行训练
 
